@@ -7,7 +7,7 @@ mod route;
 
 use std::{
     borrow::Borrow,
-    cell::{RefCell, RefMut},
+    cell::{RefCell, RefMut}, sync::atomic::AtomicBool,
 };
 
 use libc::c_void;
@@ -25,8 +25,17 @@ use tokio::{
 
 use warp::reply;
 
+struct ServerState {
+    is_run : AtomicBool
+}
+
 pub fn rocket() -> rocket::Rocket<Build> {
     rocket::build()
+        .manage({
+            SERVER_STATE.with(|slf| {
+                *slf.borrow_mut() = Some(Box::new(ServerState { is_run : AtomicBool::new(true)}));
+            });
+        })
         .mount(
             "/", //base
             routes![
@@ -43,19 +52,27 @@ pub fn rocket() -> rocket::Rocket<Build> {
 thread_local! {
     static SERVER_INSTANCE : RefCell<Option<Box<rocket::Rocket<rocket::Ignite>>>> = RefCell::new(None);
     pub static CALLBACKS : RefCell< Option<Box<Callback>>> = RefCell::new(None);
+    static SERVER_STATE : RefCell<Option<Box<ServerState>>> = RefCell::new(None);
 }
 
 type Callback = unsafe extern "C" fn(i32) -> i32;
 
 #[no_mangle]
 pub extern "C" fn rocket_state() -> SERVER_STATUS {
-    SERVER_INSTANCE.with(|slf|{
-        match slf.borrow().as_ref() {
-            Some(_) => SERVER_STATUS::R_SERVER_RUN,
-            None => SERVER_STATUS::R_SERVER_STOP,
-        }
+    SERVER_STATE.with(|slf|{
+        match slf.borrow().as_ref(){
+                    Some(server_state) => {
+                        if server_state.as_ref().is_run.load(std::sync::atomic::Ordering::Relaxed) {
+                            SERVER_STATUS::R_SERVER_RUN
+                        } else {
+                            SERVER_STATUS::R_SERVER_STOP
+                        }
+                    }
+                    None => {
+                        SERVER_STATUS::R_SERVER_STOP
+                    }
+                }
     })
-    
 }
 
 #[no_mangle]
@@ -86,7 +103,7 @@ pub extern "C" fn rocket_starter(call_back_print: Callback) -> e_rust_status {
                     )
                 ));
             });
-
+            
         e_rust_status::RUST_OK
     }
 }
