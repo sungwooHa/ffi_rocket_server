@@ -23,13 +23,15 @@ pub fn get_cim_data_all(data_type: i32) -> status::Custom<Json<Response>> {
             CString::from_raw(data)
         }
     );
-
-    let s = responseData.into_string();
     status::Custom(
         Status::from_code(404).unwrap(),
         Json(Response {
             message: format!("message test, request : {}", data_type),
-            data: serde_json::to_value(s.expect("oh no")).unwrap(),
+            data : serde_json::to_value( 
+                match responseData.into_string() {
+                    Ok(data) => data,
+                    Err(err) => err.to_string(),
+            }).unwrap(),
         }),
     )
 }
