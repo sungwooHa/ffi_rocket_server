@@ -21,7 +21,7 @@ pub fn get_cim_data_all(data_type: i32) -> status::Custom<Json<Response>> {
         unsafe{
             match slf.borrow_mut().as_ref() {
                 Some(cb_func) => {
-                    CString::from_raw(cb_func.as_ref()(data_type))
+                    CString::from_raw(cb_func.as_ref()(data_type)).clone()
                 },
                 None =>{
                     CString::new("can't find cb function instance").expect("CString::new failed")
@@ -30,6 +30,8 @@ pub fn get_cim_data_all(data_type: i32) -> status::Custom<Json<Response>> {
         }
     );
 
+    println!("{:?}", responseData.as_ref());
+    
     //let data : *mut c_char = slf.borrow_mut().as_ref().unwrap().as_ref()(data_type);
         //CString::from_raw(data)
     status::Custom(
