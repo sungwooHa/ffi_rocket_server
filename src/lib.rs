@@ -10,7 +10,7 @@ use std::{
     cell::{RefCell, RefMut}, sync::atomic::AtomicBool,
 };
 
-use libc::c_void;
+use libc::{c_void, c_char};
 use manage::{resource::*, ffi_util::e_rust_status};
 
 use futures::executor::block_on;
@@ -57,7 +57,7 @@ thread_local! {
 }
 
 type Callback = unsafe extern "C" fn(i32) -> i32;
-type CB_GetAllData = unsafe extern "C" fn(i32) -> *mut i8;
+type CB_GetAllData = unsafe extern "C" fn(i32) -> *const c_char;
 
 #[no_mangle]
 pub extern "C" fn rocket_state() -> SERVER_STATUS {
