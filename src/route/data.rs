@@ -38,7 +38,7 @@ pub fn get_cim_data_all(data_type: i32) -> status::Custom<Json<Response>> {
             message: format!("message test, request : {}", data_type),
             data : serde_json::to_value( 
                 match responseData.into_string() {
-                    Ok(data) => data,
+                    Ok(data) => data.clone(),
                     Err(err) => err.to_string(),
             }).unwrap(),
         }),
