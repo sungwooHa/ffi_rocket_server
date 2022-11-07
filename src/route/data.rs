@@ -17,20 +17,10 @@ pub fn hello() -> &'static str {
 #[allow(non_snake_case)]
 #[get("/<data_type>")]
 pub fn get_cim_data_all(data_type: i32) -> status::Custom<Json<Response>> {
+
     let responseData = crate::CALLBACKS.with(|slf|
         unsafe{
-            match slf.borrow_mut().as_ref() {
-                Some(cb_func) => {
-
-                    let str = cb_func.as_ref()(data_type);
-                    println!("{:?}", str);
-
-                    CString::from_raw(str)
-                },
-                None =>{
-                    CString::new("can't find cb function instance").expect("CString::new failed")
-                }
-            }
+            CStr::from_ptr(slf.borrow_mut().as_ref().unwrap().as_ref()(data_type))
         }
     );
 
@@ -42,11 +32,7 @@ pub fn get_cim_data_all(data_type: i32) -> status::Custom<Json<Response>> {
         Status::from_code(404).unwrap(),
         Json(Response {
             message: format!("message test, request : {}", data_type),
-            data : match serde_json::to_value( 
-                match responseData.into_string() {
-                    Ok(data) => String::from(data),
-                    Err(err) => err.to_string(),
-            }){
+            data : match serde_json::to_value(&responseData){
                 Ok(data) => data,
                 Err(err) => serde_json::to_value(err.to_string()).unwrap(),
             }
