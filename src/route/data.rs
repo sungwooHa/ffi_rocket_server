@@ -5,7 +5,7 @@ use rocket::serde::json::{serde_json, Json};
 use std::ffi::{CString, CStr};
 use libc::c_char;
 
-use crate::model::response::Response;
+use crate::model::response::{Response, self};
 
 #[get("/")]
 pub fn hello() -> &'static str {
@@ -19,16 +19,17 @@ pub fn get_cim_data_all(data_type: i32) -> status::Custom<Json<Response>> {
     
     let responseData = crate::CALLBACKS.with(|slf|
         unsafe{
-            let data : *const c_char = slf.borrow_mut().as_ref().unwrap().as_ref()(data_type);
-            CStr::from_ptr(data)
+            let data : *mut c_char = slf.borrow_mut().as_ref().unwrap().as_ref()(data_type);
+            CString::from_raw(data)
         }
     );
 
+    let s = responseData.into_string();
     status::Custom(
         Status::from_code(404).unwrap(),
         Json(Response {
             message: format!("message test, request : {}", data_type),
-            data: serde_json::to_value(responseData).unwrap(),
+            data: serde_json::to_value(s.expect("oh no")).unwrap(),
         }),
     )
 }
