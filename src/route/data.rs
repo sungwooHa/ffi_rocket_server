@@ -2,6 +2,8 @@ use rocket::http::Status;
 use rocket::response::status;
 use rocket::serde::json::{serde_json, Json};
 
+use std::ffi::CString;
+
 use crate::model::response::Response;
 
 #[get("/")]
@@ -13,16 +15,18 @@ pub fn hello() -> &'static str {
 #[allow(non_snake_case)]
 #[get("/<data_type>")]
 pub fn get_cim_data_all(data_type: i32) -> status::Custom<Json<Response>> {
-    let mut response_data: i32 = 0;
+    let mut response_data = CString::new("hello");
     crate::CALLBACKS.with(|slf| unsafe {
         let data = slf.borrow_mut().as_ref().unwrap().as_ref()(data_type);
-        response_data = data;
+        unsafe{
+            response_data = Ok(CString::from_raw(data));
+        }
     });
     status::Custom(
         Status::from_code(404).unwrap(),
         Json(Response {
             message: format!("message test, request : {}", data_type),
-            data: serde_json::to_value(response_data).unwrap(),
+            data: serde_json::to_value(response_data.unwrap()).unwrap(),
         }),
     )
 }

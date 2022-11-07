@@ -51,11 +51,13 @@ pub fn rocket() -> rocket::Rocket<Build> {
 
 thread_local! {
     static SERVER_INSTANCE : RefCell<Option<Box<rocket::Rocket<rocket::Ignite>>>> = RefCell::new(None);
-    pub static CALLBACKS : RefCell< Option<Box<Callback>>> = RefCell::new(None);
+    //pub static CALLBACKS : RefCell< Option<Box<Callback>>> = RefCell::new(None);
+    pub static CALLBACKS : RefCell< Option<Box<CB_GetAllData>>> = RefCell::new(None);
     static SERVER_STATE : RefCell<Option<Box<ServerState>>> = RefCell::new(None);
 }
 
 type Callback = unsafe extern "C" fn(i32) -> i32;
+type CB_GetAllData = unsafe extern "C" fn(i32) -> *mut i8;
 
 #[no_mangle]
 pub extern "C" fn rocket_state() -> SERVER_STATUS {
@@ -76,7 +78,7 @@ pub extern "C" fn rocket_state() -> SERVER_STATUS {
 }
 
 #[no_mangle]
-pub extern "C" fn rocket_starter(call_back_print: Callback) -> e_rust_status {
+pub extern "C" fn rocket_starter(call_back_print: CB_GetAllData) -> e_rust_status {
     ffi_panic_boundary! {
         CALLBACKS.with(|slf| {
             *slf.borrow_mut() = Some(Box::new(call_back_print));
