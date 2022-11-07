@@ -42,11 +42,14 @@ pub fn get_cim_data_all(data_type: i32) -> status::Custom<Json<Response>> {
         Status::from_code(404).unwrap(),
         Json(Response {
             message: format!("message test, request : {}", data_type),
-            data : serde_json::to_value( 
+            data : match serde_json::to_value( 
                 match responseData.into_string() {
-                    Ok(data) => data.clone(),
+                    Ok(data) => String::from(data),
                     Err(err) => err.to_string(),
-            }).unwrap(),
+            }){
+                Ok(data) => data,
+                Err(err) => serde_json::to_value(err.to_string()).unwrap(),
+            }
         }),
     )
 }
