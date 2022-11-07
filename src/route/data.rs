@@ -20,7 +20,8 @@ pub fn get_cim_data_all(data_type: i32) -> status::Custom<Json<Response>> {
 
     let responseData = crate::CALLBACKS.with(|slf|
         unsafe{
-            CStr::from_ptr(slf.borrow_mut().as_ref().unwrap().as_ref()(data_type))
+            let data : *mut c_char = slf.borrow_mut().as_ref().unwrap().as_ref()(data_type);
+            CStr::from_ptr(data)
         }
     );
 
@@ -32,10 +33,7 @@ pub fn get_cim_data_all(data_type: i32) -> status::Custom<Json<Response>> {
         Status::from_code(404).unwrap(),
         Json(Response {
             message: format!("message test, request : {}", data_type),
-            data : match serde_json::to_value(&responseData){
-                Ok(data) => data,
-                Err(err) => serde_json::to_value(err.to_string()).unwrap(),
-            }
+            data : serde_json::to_value(responseData.to_str().unwrap()).unwrap(),
         }),
     )
 }
