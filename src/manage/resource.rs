@@ -10,7 +10,6 @@ thread_local! {
     pub static SERVER_INSTANCE : RefCell<Option<Box<rocket::Rocket<rocket::Ignite>>>> = RefCell::new(None);
 }
 
-
 #[allow(non_camel_case_types)]
 #[repr(C)]
 pub enum SERVER_STATUS {
