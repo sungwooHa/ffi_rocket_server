@@ -7,41 +7,45 @@ mod route;
 
 use std::{
     borrow::Borrow,
-    cell::{RefCell, RefMut}, sync::atomic::AtomicBool,
+    cell::{RefCell, RefMut},
+    f32::consts::E,
+    sync::atomic::AtomicBool,
 };
 
-use libc::{c_void, c_char};
-use manage::{resource::*, ffi_util::e_rust_status};
+use libc::{c_char, c_void};
+use manage::{ffi_util::e_rust_status, resource::*};
 
-use futures::executor::block_on;
-use rocket::{Build, Ignite, Rocket};
+use futures::{executor::block_on, TryFutureExt};
+use rocket::{fairing::AdHoc, Build, Ignite, Rocket};
 
 use tokio::{
     //prelude::*,
-    runtime::Runtime,
+    runtime::{self, Runtime},
     sync::oneshot,
     //timer::{Delay, Interval},
 };
 
 use warp::reply;
 
-struct ServerState {
-    is_run : AtomicBool
+thread_local! {
+    static SERVER_INSTANCE : RefCell<Option<Box<rocket::Rocket<rocket::Ignite>>>> = RefCell::new(None);
+    pub static CALLBACKS_GET_ALL_DATA : RefCell<Option<Box<cb_get_all_data>>> = RefCell::new(None);
+    pub static CALLBACKS_GET_DATA : RefCell<Option<Box<cb_get_data>>> = RefCell::new(None);
+}
+
+type cb_get_all_data = unsafe extern "C" fn(i32) -> *mut c_char;
+type cb_get_data = unsafe extern "C" fn(i32, i32) -> *mut c_char;
+
+#[no_mangle]
+pub struct ServerManager {
+    pub server_thread: tokio::runtime::Runtime,
 }
 
 pub fn rocket() -> rocket::Rocket<Build> {
     rocket::build()
-        .manage({
-            SERVER_STATE.with(|slf| {
-                *slf.borrow_mut() = Some(Box::new(ServerState { is_run : AtomicBool::new(true)}));
-            });
-        })
         .mount(
             "/", //base
-            routes![
-                route::manage::hello,
-                route::manage::shutdown,
-                ],
+            routes![route::manage::hello, route::manage::shutdown,],
         )
         .mount(
             "/data", //get "$DATA_TYPE"
@@ -49,169 +53,77 @@ pub fn rocket() -> rocket::Rocket<Build> {
         )
 }
 
-thread_local! {
-    static SERVER_INSTANCE : RefCell<Option<Box<rocket::Rocket<rocket::Ignite>>>> = RefCell::new(None);
-    //pub static CALLBACKS : RefCell< Option<Box<Callback>>> = RefCell::new(None);
-    pub static CALLBACKS : RefCell<Option<Box<cb_get_all_data>>> = RefCell::new(None);
-    static SERVER_STATE : RefCell<Option<Box<ServerState>>> = RefCell::new(None);
+#[no_mangle]
+pub extern "C" fn server_run(
+    callback_get_all_data: cb_get_all_data,
+    callback_get_data: cb_get_data,
+) -> e_rust_status {
+    ffi_panic_boundary! {
+
+        // CALLBACKS_GET_ALL_DATA.with(|slf| {
+        //     *slf.borrow_mut() = Some(Box::new(callback_get_all_data));
+        // });
+
+        CALLBACKS_GET_DATA.with(|slf| {
+            *slf.borrow_mut() = Some(Box::new(callback_get_data));
+        });
+
+        let server_instance = ServerManager {
+            server_thread :
+                tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .on_thread_start(|| {
+                    println!("thread start!");
+                })
+                .on_thread_stop(|| {
+                    println!("thread stop!");
+                })
+                .build()
+                .unwrap()
+        };
+
+        server_instance.server_thread.block_on(async {
+            rocket()
+            .attach(AdHoc::on_liftoff("launch CIM ROCKET", move |_rocket| Box::pin(async move {
+                CALLBACKS_GET_ALL_DATA.with(|slf| {
+                         *slf.borrow_mut() = Some(Box::new(callback_get_all_data));
+                        });
+                println!("Rocket has lifted off!");
+            })))
+            // .attach(AdHoc::on_liftoff("launch CIM ROCKET", |_rocket| Box::pin(async move {
+            //     println!("Rocket has lifted off!");
+            // })))
+            .launch().await.expect("Failt to start server");
+        });
+
+        e_rust_status::RUST_OK
+    }
 }
 
-type Callback = unsafe extern "C" fn(i32) -> i32;
-type cb_get_all_data = unsafe extern "C" fn(i32) -> *mut c_char;
-type cb_get_data = unsafe extern "C" fn(i32, i32) -> *mut c_char;
-
 #[no_mangle]
-pub extern "C" fn rocket_state() -> SERVER_STATUS {
-    SERVER_STATE.with(|slf|{
-        match slf.borrow().as_ref(){
-                    Some(server_state) => {
-                        if server_state.as_ref().is_run.load(std::sync::atomic::Ordering::Relaxed) {
-                            SERVER_STATUS::R_SERVER_RUN
-                        } else {
-                            SERVER_STATUS::R_SERVER_STOP
+pub extern "C" fn server_shutdown() -> e_rust_status {
+    ffi_panic_boundary! {
+        let result = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(async {
+            let client = reqwest::Client::new();
+
+            match client.get("http://127.0.0.1:8000/shutdown").send().await{
+                Ok(result) => {
+                    match result.text().await {
+                        Ok(body) =>{
+                            println!("{}", body);
                         }
-                    }
-                    None => {
-                        SERVER_STATUS::R_SERVER_STOP
+                        Err(msg) => {
+                            println!("{}", msg);
+                        }
                     }
                 }
-    })
-}
-
-#[no_mangle]
-pub extern "C" fn rocket_starter(call_back_print: cb_get_all_data) -> e_rust_status {
-    ffi_panic_boundary! {
-        CALLBACKS.with(|slf| {
-            *slf.borrow_mut() = Some(Box::new(call_back_print));
+                Err(msg) => {
+                    println!("{}", msg);
+                }
+            }
         });
+        //let result = reqwest::blocking::get("127.0.0.1:8000/shutdown").unwrap().text().unwrap();
 
-        let tokio_thread = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .on_thread_start(|| {
-                println!("thread start!");
-            })
-            .on_thread_stop(|| {
-                println!("thread stop!");
-            })
-            .build()
-            .unwrap();
-
-        SERVER_INSTANCE.with(|slf| {
-            *slf.borrow_mut() = 
-                Some(
-                    Box::new(
-                        tokio_thread.block_on(async {
-                            rocket().launch().await.expect("Failt to start server")
-                        }
-                    )
-                ));
-            });
-            
         e_rust_status::RUST_OK
     }
 }
-
-//it needs gracful shutdown.
-#[no_mangle]
-pub extern "C" fn server_killer() -> e_rust_status {
-    ffi_panic_boundary! {
-        SERVER_INSTANCE.with(|slf|{
-            match slf.borrow().as_ref(){
-                        Some(server) => {
-                            server.shutdown().notify();
-                        }
-                        None => {
-                            println!("there is no server instance");
-                        }
-                    }
-        });
-        e_rust_status::RUST_OK
-        // let instance = tokio::runtime::Builder::new_current_thread().enable_all()
-        //     .on_thread_start(|| {
-        //         println!("server start!");
-        //     })
-        //     .on_thread_stop(|| {
-        //         println!("server stop!");
-        //     })
-        //     .build()
-        //     .unwrap();
-
-        // instance.block_on(
-        //     async{
-        //         let rocket = rocket().ignite().await.expect("failt to ingnite rocket");
-        //                 let shutdown_handle = rocket.shutdown();
-        //                 rocket::tokio::spawn(rocket.launch());
-        //                 shutdown_handle.notify();
-        //     }
-        // );
-
-        // SERVER_INSTANCE.with(|slf| {
-        //     //let slf = slf.borrow();
-        //     //let slf = slf.as_ref().unwrap();
-        //     match slf.borrow().as_ref(){
-        //         Some(server) => {
-        //             server.as_ref().block_on(async{
-        //                 let rocket = rocket().ignite().await.expect("failt to ingnite rocket");
-        //                 let shutdown_handle = rocket.shutdown();
-        //                 rocket::tokio::spawn(rocket.launch());
-        //                 shutdown_handle.notify();
-        //             })
-        //         }
-        //         None => {
-        //             println!("there is no server instance");
-        //         }
-        //     }
-        // });
-    }
-}
-
-// pub async fn make_server_instance() {
-//     let hello_world = warp::path::end().map(|| "Hello, World at root!");
-
-//     let hello = warp::path!("hello" / String).map(|name| format!("Hello, {}!", name));
-
-//     let killer = warp::path!("kill").map(|| {
-//         server_killer();
-//         warp::reply::json(&"ok")
-//     });
-
-//     let routes = warp::get().and(hello_world.or(hello).or(killer));
-
-//     let s = warp::serve(routes).run(([127, 0, 0, 1], 3030));
-
-//     s.await
-// }
-
-// #[no_mangle]
-// pub extern "C" fn server_starter() {
-//     let instance = tokio::runtime::Builder::new_current_thread()
-//         .enable_all()
-//         .on_thread_start(|| {
-//             println!("server start!");
-//         })
-//         .on_thread_stop(|| {
-//             println!("server stop!");
-//         })
-//         .build()
-//         .unwrap();
-
-//     instance.block_on(async { make_server_instance().await });
-
-//     SERVER_INSTANCE.with(|slf| {
-//         *slf.borrow_mut() = Some(Box::new(instance));
-//     })
-// }
-
-// #[no_mangle]
-// pub extern "C" fn server_killer() {
-//     SERVER_INSTANCE.with(|slf| {
-//         //let slf = slf.borrow();
-//         //let slf = slf.as_ref().unwrap();
-//         drop(slf.borrow().as_ref().unwrap())
-//     })
-// }
-
-// #[no_mangle]
-// pub extern "C" fn hello_world() {
-//     println!("Hello World!");
-// }
