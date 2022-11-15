@@ -1,5 +1,6 @@
 use rocket::http::Status;
 use rocket::response::status;
+use rocket::serde::json::serde_json::json;
 use rocket::serde::json::{serde_json, Json};
 
 use libc::c_char;
@@ -22,10 +23,11 @@ pub fn get_cim_data_all(data_type: i32) -> status::Custom<Json<Response>> {
     });
 
     status::Custom(
-        Status::from_code(404).unwrap(),
+        Status::from_code(200).unwrap(),
         Json(Response {
             message: format!("message test, request : {}", data_type),
-            data: serde_json::to_value(responseData.to_str().unwrap()).unwrap(),
+            //data: serde_json::to_value(responseData.to_str().unwrap()).unwrap(),
+            data : serde_json::from_str(String::from_utf8_lossy(responseData.to_bytes()).to_string().as_str()).unwrap(),
         }),
     )
 }
@@ -39,10 +41,10 @@ pub fn get_cim_data(data_type: i32, key: i32) -> status::Custom<Json<Response>> 
     });
 
     status::Custom(
-        Status::from_code(404).unwrap(),
+        Status::from_code(200).unwrap(),
         Json(Response {
             message: format!("message test, request : {}", data_type),
-            data: serde_json::to_value(responseData.to_str().unwrap()).unwrap(),
+            data : serde_json::from_str(String::from_utf8_lossy(responseData.to_bytes()).to_string().as_str()).unwrap(),
         }),
     )
 }
