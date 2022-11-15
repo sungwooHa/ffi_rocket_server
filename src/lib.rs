@@ -14,7 +14,7 @@ use std::{
 use libc::{c_char, c_void};
 use manage::{ffi_util::e_rust_status};
 
-use rocket::{fairing::AdHoc, Build};
+use rocket::{fairing::AdHoc, Build, Ignite, Rocket};
 
 use tokio::{
     //prelude::*,
@@ -66,10 +66,14 @@ pub fn set_callback_function(callback_get_all_data: cb_get_all_data, callback_ge
 
 #[no_mangle]
 pub extern "C" fn server_run(
-    callback_get_all_data: cb_get_all_data,
-    callback_get_data: cb_get_data,
+    callback_get_all_data: Option<cb_get_all_data>,
+    callback_get_data: Option<cb_get_data>,
 ) -> e_rust_status {
     ffi_panic_boundary! {
+
+        //function check.
+        let callback_get_all_data = unwrap_pointer!(callback_get_all_data);
+        let callback_get_data = unwrap_pointer!(callback_get_data);
 
         let server_instance = ServerManager {
             server_thread :

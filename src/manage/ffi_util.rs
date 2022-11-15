@@ -6,6 +6,7 @@ use ::std::{cell::RefCell, ptr::NonNull, *};
 #[repr(C)]
 pub enum e_rust_status {
     RUST_OK = 0,
+    RUST_ERR_NULL_POINTER,
     RUST_ERR_PANICKED,
 }
 
@@ -16,24 +17,21 @@ macro_rules! ffi_panic_boundary {($($tt:tt)*) => (
     // /* or */ { ::scopeguard::defer_on_unwind(process::abort()); $($tt)* }
     match ::std::panic::catch_unwind(|| {$($tt)*}) {//
         | Ok(ret) => ret,
-        | Err(_) => {
-            // /* or */ return RUST_ERR_PANICKED;
-            eprintln!("Rust panicked; aborting process");
-            ::std::process::abort()
-        },
+        | Err(_) => return e_rust_status::RUST_ERR_PANICKED,
+        // {
+        //     // eprintln!("Rust panicked; aborting process");
+        //     // ::std::process::abort()
+        // },
     }
 )}
 
-// #[macro_export]
-// macro_rules! unwrap_pointer {
-//     ($pointer:expr) => {
-//         match $pointer {
-//             //
-//             Some(non_null_pointer) => non_null_pointer,
-//             None => return RUST_ERR_NULL_POINTER,
-//         }
-//     };
-// }
+#[macro_export]
+macro_rules! unwrap_pointer {($pointer:expr) => (
+    match $pointer {//
+        | Some(non_null_pointer) => non_null_pointer,
+        | None => return e_rust_status::RUST_ERR_NULL_POINTER,
+    }
+)}
 
 // #[no_mangle]
 // pub extern "C" fn register_cb(cb: Option<Callback>, arg: Option<Arg>) -> e_rust_status {
