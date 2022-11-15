@@ -26,12 +26,15 @@ macro_rules! ffi_panic_boundary {($($tt:tt)*) => (
 )}
 
 #[macro_export]
-macro_rules! unwrap_pointer {($pointer:expr) => (
-    match $pointer {//
-        | Some(non_null_pointer) => non_null_pointer,
-        | None => return e_rust_status::RUST_ERR_NULL_POINTER,
-    }
-)}
+macro_rules! unwrap_pointer {
+    ($pointer:expr) => {
+        match $pointer {
+            //
+            Some(non_null_pointer) => non_null_pointer,
+            None => return e_rust_status::RUST_ERR_NULL_POINTER,
+        }
+    };
+}
 
 // #[no_mangle]
 // pub extern "C" fn register_cb(cb: Option<Callback>, arg: Option<Arg>) -> e_rust_status {

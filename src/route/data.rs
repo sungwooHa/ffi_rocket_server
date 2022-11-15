@@ -3,7 +3,6 @@ use rocket::response::status;
 use rocket::serde::json::{serde_json, Json};
 
 use libc::c_char;
-use std::borrow::BorrowMut;
 use std::ffi::{CStr, CString};
 
 use crate::model::response::{self, Response};

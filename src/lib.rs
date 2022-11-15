@@ -8,20 +8,16 @@ mod route;
 use std::{
     borrow::Borrow,
     cell::{RefCell, RefMut},
-    sync::atomic::AtomicBool, f32::consts::E,
+    f32::consts::E,
+    sync::atomic::AtomicBool,
 };
 
 use libc::{c_char, c_void};
-use manage::{ffi_util::e_rust_status};
+use manage::ffi_util::e_rust_status;
 
 use rocket::{fairing::AdHoc, Build, Ignite, Rocket};
 
-use tokio::{
-    //prelude::*,
-    runtime::{self, Runtime},
-};
-
-use warp::reply;
+use tokio::runtime::{self, Runtime};
 
 thread_local! {
     static SERVER_INSTANCE : RefCell<Option<Box<rocket::Rocket<rocket::Ignite>>>> = RefCell::new(None);
@@ -31,7 +27,6 @@ thread_local! {
 
 type cb_get_all_data = unsafe extern "C" fn(i32) -> *mut c_char;
 type cb_get_data = unsafe extern "C" fn(i32, i32) -> *mut c_char;
-
 
 #[no_mangle]
 pub struct ServerManager {
@@ -46,14 +41,14 @@ pub fn rocket() -> rocket::Rocket<Build> {
         )
         .mount(
             "/data", //get "$DATA_TYPE"
-            routes![
-                route::data::get_cim_data_all,
-                route::data::get_cim_data,
-            ],
+            routes![route::data::get_cim_data_all, route::data::get_cim_data,],
         )
 }
 
-pub fn set_callback_function(callback_get_all_data: cb_get_all_data, callback_get_data: cb_get_data){
+pub fn set_callback_function(
+    callback_get_all_data: cb_get_all_data,
+    callback_get_data: cb_get_data,
+) {
     CALLBACKS_GET_ALL_DATA.with(|slf| {
         *slf.borrow_mut() = Some(Box::new(callback_get_all_data));
     });
@@ -88,7 +83,7 @@ pub extern "C" fn server_run(
                 .build()
                 .unwrap()
         };
-        
+
         server_instance.server_thread.block_on(async {
             rocket()
             .attach(AdHoc::on_liftoff("launch CIM ROCKET", move |_| Box::pin(async move {
@@ -124,7 +119,7 @@ pub extern "C" fn server_shutdown() -> e_rust_status {
             }
         });
         //let result = reqwest::blocking::get("127.0.0.1:8000/shutdown").unwrap().text().unwrap();
-    
+
         e_rust_status::RUST_OK
     }
 }
