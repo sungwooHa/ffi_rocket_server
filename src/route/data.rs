@@ -32,7 +32,7 @@ pub fn get_cim_data_all(data_type: i32) -> status::Custom<Json<Response>> {
     status::Custom(
         Status::from_code(200).unwrap(),
         Json(Response {
-            message: format!("message test, request : {}", data_type),
+            message: format!("get all data from : {}", data_type),
             data: serde_json::from_str(responseData.as_str()).unwrap(),
         }),
     )
@@ -55,7 +55,7 @@ pub fn get_cim_data(data_type: i32, key: i32) -> status::Custom<Json<Response>> 
     status::Custom(
         Status::from_code(200).unwrap(),
         Json(Response {
-            message: format!("message test, request : {}", data_type),
+            message: format!("get data from : {}", data_type),
             data: serde_json::from_str(responseData.as_str()).unwrap(),
         }),
     )
